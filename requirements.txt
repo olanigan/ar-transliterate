@@ -3,3 +3,4 @@ yt-dlp
 pydub
 requests
 groq
+google-generativeai
