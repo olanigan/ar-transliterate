@@ -1,6 +1,8 @@
 import streamlit as st
 import yt_dlp
+import requests
 from transcribe import transcribe
+from pydub import AudioSegment
 
 # Google Gemini API Key (replace with your actual key)
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
@@ -79,16 +81,6 @@ youtube_url = st.text_input("Enter YouTube URL:")
 
 if st.button("Transcribe and Improve"):
     if youtube_url:
-        with st.spinner("Extracting audio..."):
-            ydl_opts = {"format": "bestaudio/best", "outtmpl": "audio.%(ext)s"}
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-               info =  ydl.extract_info(youtube_url, download=True)
-               filename = ydl.prepare_filename(info)
-
-               audio_file = AudioSegment.from_file(filename)
-
-
-
 
         with st.spinner("Transcribing with Groq..."):
             original_transcript = transcribe(youtube_url)
@@ -96,15 +88,6 @@ if st.button("Transcribe and Improve"):
                 st.stop()  # Stop execution if transcription fails
             st.write("Original Transcript:")
             st.text(original_transcript)
-
-        with st.spinner("Downloading audio..."):
-            ydl_opts = {"format": "bestaudio/best", "outtmpl": "audio.%(ext)s"}
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-               info =  ydl.extract_info(youtube_url, download=True)
-               filename = ydl.prepare_filename(info)
-
-               audio_file = AudioSegment.from_file(filename)
-
 
         with st.spinner("Improving transcript with Gemini Flash..."):
             edited_transcript = improve_transcript(original_transcript)
