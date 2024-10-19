@@ -1,12 +1,6 @@
 import streamlit as st
 import yt_dlp
-import requests
-import json
-from pydub import AudioSegment
-from pydub.utils import make_chunks
-
-# Groq API Key (replace with your actual key)
-GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
+from transcribe import transcribe
 
 # Google Gemini API Key (replace with your actual key)
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
@@ -16,26 +10,6 @@ OPTIMIZED_PROMPT = """
 Arabic (and non-English) words are italicized.  Exception: Non-English words that have entered the English vernacular (e.g., Allah, Imām, Quran) are not italicized.  People's names and place names are not italicized.  Book titles are italicized.  "al-" is lowercase unless it is the first word of a sentence or title.  Do not use hamzat al-waṣl for *sūrah* names or prayers (e.g., *Sūrat al-Fātiḥah*, *ṣalāt al-Fajr*).  Do not use apostrophes or single quotes for ع or ء; use their respective symbols (ʿ and ʾ).  Words ending in ة end with "h" (e.g., *sūrah*, *Abu Ḥanīfah*).  Do not transliterate hamzah unless the word is between two words.  Represent *shaddah* with a double letter (e.g., شدّة = *shaddah*). Do not use contractions.  Keep the original Arabic text as is.  Do not add any extra information or commentary.  Only edit the provided text.
 """
 
-
-def transcribe_audio(audio_file):
-    headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
-    url = "https://api.groq.com/v1/inference/whisper-large-v2"
-
-    transcript = ""
-    chunks = make_chunks(audio_file, 10 * 60 * 1000)  # 10-minute chunks
-
-    for i, chunk in enumerate(chunks):
-        chunk.export(f"chunk{i}.mp3", format="mp3")
-        with open(f"chunk{i}.mp3", "rb") as audio:
-            response = requests.post(url, headers=headers, files={"audio_file": audio})
-
-        if response.status_code == 200:
-            transcript += response.json()["text"]
-        else:
-            st.error(f"Groq API error: {response.status_code} - {response.text}")
-            return None
-
-    return transcript
 
 
 def improve_transcript(transcript):
@@ -64,11 +38,12 @@ def improve_transcript(transcript):
 
 
 
+
 def compare_and_correct(original, edited):
 
     # Placeholder for comparison logic (Gemini Pro) - requires more complex implementation
     # due to context window limitations and cost considerations
-    # This is a simplified example, you'll need to chunk the text for longer transcripts
+    # This is a simplified example, you'll need to chunk the text for longer transcripts    
     headers = {
         "Authorization": f"Bearer {GEMINI_API_KEY}",
         "Content-Type": "application/json",
@@ -115,12 +90,20 @@ if st.button("Transcribe and Improve"):
 
 
 
-        with st.spinner("Transcribing with Whisper..."):
-            original_transcript = transcribe_audio(audio_file)
+        with st.spinner("Transcribing with Groq..."):
+            original_transcript = transcribe(youtube_url)
             if original_transcript is None:
                 st.stop()  # Stop execution if transcription fails
             st.write("Original Transcript:")
             st.text(original_transcript)
+
+        with st.spinner("Downloading audio..."):
+            ydl_opts = {"format": "bestaudio/best", "outtmpl": "audio.%(ext)s"}
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+               info =  ydl.extract_info(youtube_url, download=True)
+               filename = ydl.prepare_filename(info)
+
+               audio_file = AudioSegment.from_file(filename)
 
 
         with st.spinner("Improving transcript with Gemini Flash..."):
