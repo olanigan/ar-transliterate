@@ -5,6 +5,7 @@ from transcribe import transcribe
 from pydub import AudioSegment
 import os
 import tempfile
+import google.generativeai as genai
 
 # Google Gemini API Key (replace with your actual key)
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
@@ -14,16 +15,16 @@ OPTIMIZED_PROMPT = """
 Arabic (and non-English) words are italicized.  Exception: Non-English words that have entered the English vernacular (e.g., Allah, Imām, Quran) are not italicized.  People's names and place names are not italicized.  Book titles are italicized.  "al-" is lowercase unless it is the first word of a sentence or title.  Do not use hamzat al-waṣl for *sūrah* names or prayers (e.g., *Sūrat al-Fātiḥah*, *ṣalāt al-Fajr*).  Do not use apostrophes or single quotes for ع or ء; use their respective symbols (ʿ and ʾ).  Words ending in ة end with "h" (e.g., *sūrah*, *Abu Ḥanīfah*).  Do not transliterate hamzah unless the word is between two words.  Represent *shaddah* with a double letter (e.g., شدّة = *shaddah*). Do not use contractions.  Keep the original Arabic text as is.  Do not add any extra information or commentary.  Only edit the provided text.
 """
 
-import google.generativeai as genai
+
 
 
 genai.configure(api_key= st.secrets["GEMINI_API_KEY"])
 
 def improve_transcript(transcript):
-    headers = {
-        "Authorization": f"Bearer {GEMINI_API_KEY}",
-        "Content-Type": "application/json",
-    }
+    # headers = {
+    #     "Authorization": f"Bearer {GEMINI_API_KEY}",
+    #     "Content-Type": "application/json",
+    # }
     # url = "https://api.generativeai.google.com/v1beta2/models/gemini-flash-002:generateText"
 
 
@@ -40,8 +41,10 @@ def improve_transcript(transcript):
          if response.status_code == 200:
                edited_transcript += response.json()["candidates"][0]["output"]
          else:
-                st.error(f"Gemini Flash API error: {response.status_code} - {response.text}")
+                st.error(f"Gemini Gemini API error: {response.status_code} - {response.text}")
                 return None
+    with open("edited_transcript.txt", "w") as f:
+         f.write(edited_transcript)
     return edited_transcript
 
 
@@ -53,12 +56,13 @@ def compare_and_correct(original, edited):
     # Placeholder for comparison logic (Gemini Pro) - requires more complex implementation
     # due to context window limitations and cost considerations
     # This is a simplified example, you'll need to chunk the text for longer transcripts    
-    headers = {
-        "Authorization": f"Bearer {GEMINI_API_KEY}",
-        "Content-Type": "application/json",
-    }
-    url = "https://api.generativeai.google.com/v1beta2/models/gemini-pro-002:generateText"
-
+    # headers = {
+    #     "Authorization": f"Bearer {GEMINI_API_KEY}",
+    #     "Content-Type": "application/json",
+    # }
+    # url = "https://api.generativeai.google.com/v1beta2/models/gemini-pro-002:generateText"
+    model = genai.GenerativeModel("gemini-1.5-pro-002")
+    
     corrected_transcript = ""
     chunks = [edited[i:i+8000] for i in range(0, len(edited), 8000)]
 
@@ -71,14 +75,15 @@ def compare_and_correct(original, edited):
              "prompt": {"text": prompt},
         }
 
-      response = requests.post(url, headers=headers, json=payload)
+      response = model.generate_content(payload);
       if response.status_code == 200:
                 corrected_transcript += response.json()["candidates"][0]["output"]
 
       else:
             st.error(f"Gemini Pro API error: {response.status_code} - {response.text}")
             return None
-
+    with open("corrected_transcript.txt", "w") as f:
+        f.write(corrected_transcript)
     return corrected_transcript
 
 def download_audio(youtube_url):
@@ -102,7 +107,7 @@ use_existing_audio = st.checkbox("Use existing audio file")
 
 if st.button("Transcribe and Improve"):
     if youtube_url:
-        existing_audio_file = None
+        # existing_audio_file = None
         # if use_existing_audio:
         #     audio_files = [f for f in os.listdir() if f.endswith('.mp3')]
         #     if audio_files:
@@ -143,5 +148,5 @@ if st.button("Transcribe and Improve"):
             st.write("Corrected Transcript:")
             st.text(corrected_transcript)
 
-        if not existing_audio_file:
-            os.remove(audio_file)
+        # if not existing_audio_file:
+        #     os.remove(audio_file)

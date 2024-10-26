@@ -57,7 +57,8 @@ def transcribe(video_url, existing_audio_file=None):
         full_transcription = "\n\n".join(transcriptions)
         logging.info(f"Full transcription (first 500 chars): {full_transcription[:500]}...")
 
-        transcript_file = f"{os.path.splitext(os.path.basename(audio_file))[0]}_transcript.txt"
+        #transcript_file = f"{os.path.splitext(os.path.basename(audio_file))[0]}_transcript.txt"
+        transcript_file = "transcript.txt"
         with open(transcript_file, "w") as f:
             f.write(full_transcription)
 
