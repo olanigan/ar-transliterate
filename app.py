@@ -107,27 +107,27 @@ use_existing_audio = st.checkbox("Use existing audio file")
 
 if st.button("Transcribe and Improve"):
     if youtube_url:
-        # existing_audio_file = None
-        # if use_existing_audio:
-        #     audio_files = [f for f in os.listdir() if f.endswith('.mp3')]
-        #     if audio_files:
-        #         existing_audio_file = st.selectbox("Select existing audio file:", audio_files)
-        #     else:
-        #         st.warning("No existing audio files found. Proceeding with download.")
+        existing_audio_file = None
+        if use_existing_audio:
+            audio_files = [f for f in os.listdir() if f.endswith('.mp3')]
+            if audio_files:
+                existing_audio_file = st.selectbox("Select existing audio file:", audio_files)
+            else:
+                st.warning("No existing audio files found. Proceeding with download.")
 
-        # if not existing_audio_file:
-        #     with st.spinner("Downloading audio..."):
-        #         audio_file = download_audio(youtube_url)
-        # else:
-        #     audio_file = existing_audio_file
+        if not existing_audio_file:
+            with st.spinner("Downloading audio..."):
+                audio_file = download_audio(youtube_url)
+        else:
+            audio_file = existing_audio_file
 
-        # with st.spinner("Transcribing with Groq..."):
-        #     original_transcript = transcribe(youtube_url, existing_audio_file=audio_file)
-        #     if original_transcript is None:
-        #         st.error("Transcription failed. Please try again.")
-        #         st.stop()
-        #     st.write("Original Transcript:")
-        #     st.text(original_transcript)
+        with st.spinner("Transcribing with Groq..."):
+            original_transcript = transcribe(youtube_url, existing_audio_file=audio_file)
+            if original_transcript is None:
+                st.error("Transcription failed. Please try again.")
+                st.stop()
+            st.write("Original Transcript:")
+            st.text(original_transcript)
         
         with open("transcript.txt", "r") as file:
             original_transcript = file.read()
