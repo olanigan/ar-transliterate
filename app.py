@@ -105,7 +105,7 @@ st.title("YouTube Transcript Improver")
 youtube_url = st.text_input("Enter YouTube URL:")
 use_existing_audio = st.checkbox("Use existing audio file")
 
-if st.button("Transcribe and Improve"):
+if st.button("Transcribe"):
     if youtube_url:
         existing_audio_file = None
         if use_existing_audio:
@@ -134,19 +134,27 @@ if st.button("Transcribe and Improve"):
         st.write("Original Transcript:")
         st.text(original_transcript)
 
-        with st.spinner("Improving transcript with Gemini Flash..."):
-            edited_transcript = improve_transcript(original_transcript)
-            if edited_transcript is None:
-                st.stop()
-            st.write("Edited Transcript:")
-            st.text(edited_transcript)
+# Create tabs for editing and improving the transcript
+tab1, tab2 = st.tabs(["Edit Transcript", "Improve and Compare"])
 
+with tab1:
+    st.header("Edit Transcript")
+    edited_transcript = st.text_area("Edit the transcript here:", original_transcript, height=300)
+
+with tab2:
+    st.header("Improve and Compare Transcript")
+    if st.button("Improve Transcript"):
+        with st.spinner("Improving transcript with Gemini Flash..."):
+            improved_transcript = improve_transcript(edited_transcript)
+            if improved_transcript is None:
+                st.stop()
+            st.write("Improved Transcript:")
+            st.text(improved_transcript)
+
+    if st.button("Compare and Correct Transcript"):
         with st.spinner("Comparing and Correcting with Gemini Pro..."):
-            corrected_transcript = compare_and_correct(original_transcript, edited_transcript)
+            corrected_transcript = compare_and_correct(original_transcript, improved_transcript)
             if corrected_transcript is None:
                 st.stop()
             st.write("Corrected Transcript:")
             st.text(corrected_transcript)
-
-        # if not existing_audio_file:
-        #     os.remove(audio_file)
