@@ -2,7 +2,7 @@ install:
 	pip install -r requirements.txt
 
 run:
-	streamlit run app.py
+	streamlit run app2.py
 
 clean:
 	rm -rf __pycache__

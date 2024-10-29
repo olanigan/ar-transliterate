@@ -1,92 +1,118 @@
 import streamlit as st
 import yt_dlp
 import requests
-from transcribe import transcribe
+from transcribe import transcribe  # Ensure this module is correctly implemented
 from pydub import AudioSegment
 import os
 import tempfile
 import google.generativeai as genai
 
-# Google Gemini API Key (replace with your actual key)
+# -------------------------
+# Configuration and Setup
+# -------------------------
+
+# Load environment variables securely using Streamlit Secrets
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+
+# Configure Google Generative AI
+genai.configure(api_key=GEMINI_API_KEY)
 
 # Optimized prompt for Gemini Flash
 OPTIMIZED_PROMPT = """
 Arabic (and non-English) words are italicized.  Exception: Non-English words that have entered the English vernacular (e.g., Allah, Imām, Quran) are not italicized.  People's names and place names are not italicized.  Book titles are italicized.  "al-" is lowercase unless it is the first word of a sentence or title.  Do not use hamzat al-waṣl for *sūrah* names or prayers (e.g., *Sūrat al-Fātiḥah*, *ṣalāt al-Fajr*).  Do not use apostrophes or single quotes for ع or ء; use their respective symbols (ʿ and ʾ).  Words ending in ة end with "h" (e.g., *sūrah*, *Abu Ḥanīfah*).  Do not transliterate hamzah unless the word is between two words.  Represent *shaddah* with a double letter (e.g., شدّة = *shaddah*). Do not use contractions.  Keep the original Arabic text as is.  Do not add any extra information or commentary.  Only edit the provided text.
 """
 
+# Initialize session state variables
+if 'original_transcript' not in st.session_state:
+    st.session_state.original_transcript = ""
+if 'improved_transcript' not in st.session_state:
+    st.session_state.improved_transcript = ""
+if 'final_transcript' not in st.session_state:
+    st.session_state.final_transcript = ""
 
-
-
-genai.configure(api_key= st.secrets["GEMINI_API_KEY"])
+# -------------------------
+# Helper Functions
+# -------------------------
 
 def improve_transcript(transcript):
-    # headers = {
-    #     "Authorization": f"Bearer {GEMINI_API_KEY}",
-    #     "Content-Type": "application/json",
-    # }
-    # url = "https://api.generativeai.google.com/v1beta2/models/gemini-flash-002:generateText"
-
-
+    """
+    Improves the transcript using Gemini Flash model.
+    Splits the transcript into chunks to comply with API limits.
+    """
     edited_transcript = ""
-    chunks = [transcript[i:i+8000] for i in range(0, len(transcript), 8000)] #8000 charachter chunks
+    chunks = [transcript[i:i+8000] for i in range(0, len(transcript), 8000)]  # 8000 character chunks
     model = genai.GenerativeModel("gemini-1.5-flash")
-    for chunk in chunks:
-         payload = {
-             "prompt": {"text": f"{OPTIMIZED_PROMPT}\n\n{chunk}"},
-        }
-        #  response = requests.post(url, headers=headers, json=payload)
-         response = model.generate_content(payload);
 
-         if response.status_code == 200:
-               edited_transcript += response.json()["candidates"][0]["output"]
-         else:
-                st.error(f"Gemini Gemini API error: {response.status_code} - {response.text}")
+    for chunk in chunks:
+        prompt_text = f"{OPTIMIZED_PROMPT}\n\n{chunk}"
+        payload = {
+            "prompt": {"text": prompt_text},
+        }
+
+        try:
+            # response = model.generate_content(payload)
+            response = model.generate_content(prompt_text);
+            # Assuming the response contains 'candidates' with 'output'
+            if response and 'candidates' in response and len(response['candidates']) > 0:
+                edited_transcript += response['candidates'][0]['output']
+            else:
+                st.error("No output received from Gemini Flash API.")
                 return None
-    with open("edited_transcript.txt", "w") as f:
-         f.write(edited_transcript)
+        except Exception as e:
+            st.error(f"Gemini Flash API error: {e}")
+            return None
+
+    # Optionally, save the edited transcript to a file
+    with open("edited_transcript.txt", "w", encoding='utf-8') as f:
+        f.write(edited_transcript)
+
     return edited_transcript
 
-
-
-
-
 def compare_and_correct(original, edited):
-
-    # Placeholder for comparison logic (Gemini Pro) - requires more complex implementation
-    # due to context window limitations and cost considerations
-    # This is a simplified example, you'll need to chunk the text for longer transcripts    
-    # headers = {
-    #     "Authorization": f"Bearer {GEMINI_API_KEY}",
-    #     "Content-Type": "application/json",
-    # }
-    # url = "https://api.generativeai.google.com/v1beta2/models/gemini-pro-002:generateText"
-    model = genai.GenerativeModel("gemini-1.5-pro-002")
-    
+    """
+    Compares the edited transcript with the original and corrects any discrepancies using Gemini Pro model.
+    """
     corrected_transcript = ""
-    chunks = [edited[i:i+8000] for i in range(0, len(edited), 8000)]
+    chunks = [edited[i:i+8000] for i in range(0, len(edited), 8000)]  # 8000 character chunks
+    original_chunks = [original[i:i+8000] for i in range(0, len(original), 8000)]
+    model = genai.GenerativeModel("gemini-1.5-pro-002")
 
-    for chunk_edited, chunk_original in zip(chunks,[original[i:i+8000] for i in range(0, len(original), 8000)]):
-      prompt = f"""Compare the edited transcript with the original transcript and correct any errors or unnecessary changes in the edited transcript.\
-                 Make sure the edited transcript follows the prompt and the changes are accurate.\
-                 Original Transcript:\n{chunk_original} \
-                 Edited Transcript:\n{chunk_edited}"""
-      payload = {
-             "prompt": {"text": prompt},
+    for chunk_edited, chunk_original in zip(chunks, original_chunks):
+        prompt = f"""Compare the edited transcript with the original transcript and correct any errors or unnecessary changes in the edited transcript.\
+Make sure the edited transcript follows the prompt and the changes are accurate.
+
+Original Transcript:
+{chunk_original}
+
+Edited Transcript:
+{chunk_edited}
+"""
+        payload = {
+            "prompt": {"text": prompt},
         }
 
-      response = model.generate_content(payload);
-      if response.status_code == 200:
-                corrected_transcript += response.json()["candidates"][0]["output"]
-
-      else:
-            st.error(f"Gemini Pro API error: {response.status_code} - {response.text}")
+        try:
+            response = model.generate_content(payload)
+            if response and 'candidates' in response and len(response['candidates']) > 0:
+                corrected_transcript += response['candidates'][0]['output']
+            else:
+                st.error("No output received from Gemini Pro API.")
+                return None
+        except Exception as e:
+            st.error(f"Gemini Pro API error: {e}")
             return None
-    with open("corrected_transcript.txt", "w") as f:
+
+    # Optionally, save the corrected transcript to a file
+    with open("corrected_transcript.txt", "w", encoding='utf-8') as f:
         f.write(corrected_transcript)
+
     return corrected_transcript
 
 def download_audio(youtube_url):
+    """
+    Downloads audio from a YouTube URL using yt_dlp.
+    Returns the path to the downloaded audio file.
+    """
     ydl_opts = {
         'format': 'bestaudio/best',
         'postprocessors': [{
@@ -95,58 +121,164 @@ def download_audio(youtube_url):
             'preferredquality': '192',
         }],
         'outtmpl': '%(id)s.%(ext)s',
+        'quiet': True,
+        'no_warnings': True,
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(youtube_url, download=True)
-        return f"{info['id']}.mp3"
+        audio_file = f"{info['id']}.mp3"
+    return audio_file
 
-st.title("YouTube Transcript Improver")
+def upload_to_gemini(audio_file_path):
+    """
+    Uploads the audio file to Gemini API for transcription.
+    Returns the path or identifier of the uploaded file.
+    """
+    # Placeholder function: Implement the actual upload logic based on Gemini API specifications
+    # This might involve sending the file to a specific endpoint and receiving an upload ID
+    # For demonstration, we'll assume the file is uploaded and return the same path
+    return audio_file_path
 
-youtube_url = st.text_input("Enter YouTube URL:")
-use_existing_audio = st.checkbox("Use existing audio file")
+def transcribe_audio(uploaded_file_path):
+    """
+    Transcribes the uploaded audio file using the transcribe function from transcribe module.
+    """
+    try:
+        transcript = transcribe(uploaded_file_path)
+        return transcript
+    except Exception as e:
+        st.error(f"Transcription error: {e}")
+        return None
 
-if st.button("Transcribe and Improve"):
-    if youtube_url:
-        # existing_audio_file = None
-        # if use_existing_audio:
-        #     audio_files = [f for f in os.listdir() if f.endswith('.mp3')]
-        #     if audio_files:
-        #         existing_audio_file = st.selectbox("Select existing audio file:", audio_files)
-        #     else:
-        #         st.warning("No existing audio files found. Proceeding with download.")
+# -------------------------
+# Streamlit Application
+# -------------------------
 
-        # if not existing_audio_file:
-        #     with st.spinner("Downloading audio..."):
-        #         audio_file = download_audio(youtube_url)
-        # else:
-        #     audio_file = existing_audio_file
+st.title("📄 YouTube Transcript Improver & 🎤 Audio Transcription")
 
-        # with st.spinner("Transcribing with Groq..."):
-        #     original_transcript = transcribe(youtube_url, existing_audio_file=audio_file)
-        #     if original_transcript is None:
-        #         st.error("Transcription failed. Please try again.")
-        #         st.stop()
-        #     st.write("Original Transcript:")
-        #     st.text(original_transcript)
-        
-        with open("transcript.txt", "r") as file:
-            original_transcript = file.read()
-        st.write("Original Transcript:")
-        st.text(original_transcript)
+# -------------------------
+# Text Editing Workflow
+# -------------------------
+st.header("📝 Text Editing Workflow")
 
+# Original Editor
+st.subheader("Original Transcript Editor")
+original_editor = st.text_area(
+    "Edit the original transcript here:",
+    value=st.session_state.original_transcript,
+    height=200,
+    key="original_editor"
+)
+
+# Update session state
+st.session_state.original_transcript = original_editor
+
+# Improve Transcript Button
+if st.button("Improve Transcript"):
+    if st.session_state.original_transcript.strip() == "":
+        st.error("Original transcript is empty. Please enter text to improve.")
+    else:
         with st.spinner("Improving transcript with Gemini Flash..."):
-            edited_transcript = improve_transcript(original_transcript)
-            if edited_transcript is None:
-                st.stop()
-            st.write("Edited Transcript:")
-            st.text(edited_transcript)
+            improved = improve_transcript(st.session_state.original_transcript)
+            if improved:
+                st.session_state.improved_transcript = improved
+                st.success("Transcript improved successfully!")
+            else:
+                st.error("Failed to improve the transcript.")
 
-        with st.spinner("Comparing and Correcting with Gemini Pro..."):
-            corrected_transcript = compare_and_correct(original_transcript, edited_transcript)
-            if corrected_transcript is None:
-                st.stop()
-            st.write("Corrected Transcript:")
-            st.text(corrected_transcript)
+# Improved Editor
+st.subheader("Improved Transcript Editor")
+improved_editor = st.text_area(
+    "Edit the improved transcript here:",
+    value=st.session_state.improved_transcript,
+    height=200,
+    key="improved_editor"
+)
 
-        # if not existing_audio_file:
-        #     os.remove(audio_file)
+# Update session state
+st.session_state.improved_transcript = improved_editor
+
+# Finalize Transcript Button
+if st.button("Finalize Transcript"):
+    if st.session_state.improved_transcript.strip() == "":
+        st.error("Improved transcript is empty. Please improve the text first.")
+    else:
+        with st.spinner("Finalizing transcript with Gemini Pro..."):
+            final = compare_and_correct(st.session_state.original_transcript, st.session_state.improved_transcript)
+            if final:
+                st.session_state.final_transcript = final
+                st.success("Transcript finalized successfully!")
+            else:
+                st.error("Failed to finalize the transcript.")
+
+# Final Editor
+st.subheader("Final Transcript Editor")
+final_editor = st.text_area(
+    "Final transcript will appear here:",
+    value=st.session_state.final_transcript,
+    height=200,
+    key="final_editor"
+)
+
+# Update session state
+st.session_state.final_transcript = final_editor
+
+# -------------------------
+# Audio Transcription Workflow
+# -------------------------
+st.header("🎧 Audio Transcription Workflow")
+
+# Upload Audio File
+uploaded_audio = st.file_uploader(
+    "Upload an audio file for transcription (mp3, wav, m4a):",
+    type=["mp3", "wav", "m4a"]
+)
+
+# Initialize session state for audio
+if 'uploaded_audio_path' not in st.session_state:
+    st.session_state.uploaded_audio_path = None
+if 'transcribed_audio' not in st.session_state:
+    st.session_state.transcribed_audio = ""
+
+# Audio Workflow Buttons
+if uploaded_audio is not None:
+    # Save uploaded file to a temporary directory
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_file:
+        tmp_file.write(uploaded_audio.getbuffer())
+        uploaded_file_path = tmp_file.name
+    st.session_state.uploaded_audio_path = uploaded_file_path
+
+    # Display audio player
+    st.audio(uploaded_file_path, format='audio/mp3')
+
+    # Upload to Gemini Button
+    if st.button("Upload to Gemini"):
+        with st.spinner("Uploading audio to Gemini..."):
+            uploaded_to_gemini = upload_to_gemini(uploaded_file_path)
+            if uploaded_to_gemini:
+                st.success("Audio uploaded to Gemini successfully!")
+            else:
+                st.error("Failed to upload audio to Gemini.")
+
+    # Transcribe Button
+    if st.button("Transcribe"):
+        if st.session_state.uploaded_audio_path is None:
+            st.error("No audio file uploaded. Please upload an audio file first.")
+        else:
+            with st.spinner("Transcribing audio..."):
+                transcript = transcribe_audio(st.session_state.uploaded_audio_path)
+                if transcript:
+                    st.session_state.transcribed_audio = transcript
+                    st.success("Audio transcribed successfully!")
+                else:
+                    st.error("Failed to transcribe audio.")
+
+    # Display Transcribed Text
+    if st.session_state.transcribed_audio:
+        st.subheader("Transcribed Text")
+        st.text_area(
+            "Transcribed text:",
+            value=st.session_state.transcribed_audio,
+            height=200,
+            key="transcribed_audio"
+        )
